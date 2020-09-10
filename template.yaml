@@ -1,129 +1,126 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CFT Stack to create VPC including public and private subnets with custom route table and Nacls for each subnet
+Description: CFT Stack to create IAM role, group, policy and users
 
-Resources:
-  myVPC:
-    Type: AWS::EC2::VPC
+Parameters:
+   password:
+      Type: String
+      NoEcho: True 
+Resources: 
+  DevGroupCreation: 
+    Type: AWS::IAM::Group
     Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: 'false'
-      EnableDnsHostnames: 'false'
-      InstanceTenancy: default
-  myPublicSubnet:
-    Type: AWS::EC2::Subnet
+      GroupName: devGroup
+      
+  TestingGroupCreation: 
+    Type: AWS::IAM::Group
     Properties:
-      VpcId:
-        Ref: myVPC
-      CidrBlock: 10.0.0.0/24
-      AvailabilityZone: "us-east-1a"
-  myPrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId:
-        Ref: myVPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: "us-east-1a"
-  myInternetGateway:
-    Type: AWS::EC2::InternetGateway
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref myVPC
-      InternetGatewayId: !Ref myInternetGateway
-  myPublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref myVPC
-  myPrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref myVPC
-  myPrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref myPrivateSubnet
-      RouteTableId: !Ref myPrivateRouteTable
-  myPublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref myPublicSubnet
-      RouteTableId: !Ref myPublicRouteTable
-  myInternetGatewayRoute:
-    Type: AWS::EC2::Route
-    DependsOn: myPublicSubnetRouteTableAssociation
-    Properties:
-       RouteTableId: !Ref myPublicRouteTable
-       DestinationCidrBlock: 0.0.0.0/0
-       GatewayId: !Ref myInternetGateway
-  myPublicNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-        VpcId: !Ref myVPC
-  myPrivateNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-        VpcId: !Ref myVPC
-  myPrivateSubnetPrivateNetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref myPrivateSubnet
-      NetworkAclId: !Ref myPrivateNetworkAcl
-  myPubliceSubnetPrivateNetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref myPublicSubnet
-      NetworkAclId: !Ref myPublicNetworkAcl
-  PublicInboundRule:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-       NetworkAclId: !Ref myPublicNetworkAcl
-       RuleNumber: 101
-       Protocol: -1
-       RuleAction: allow
-       CidrBlock: 0.0.0.0/0
+      GroupName: testGroup
 
-  PrivateInboundRule:
-    Type: AWS::EC2::NetworkAclEntry
+  devUserCreation:
+    Type: AWS::IAM::User
     Properties:
-       NetworkAclId: !Ref myPrivateNetworkAcl
-       RuleNumber: 101
-       Protocol: -1
-       RuleAction: allow
-       CidrBlock: 0.0.0.0/0
-  PublicOutboundRule:
-    Type: AWS::EC2::NetworkAclEntry
+      LoginProfile:
+        Password: 
+          Ref: password
+      UserName: devUser
+  testingUserCreation:
+    Type: AWS::IAM::User
     Properties:
-       NetworkAclId: !Ref myPublicNetworkAcl
-       RuleNumber: 101
-       Protocol: -1
-       Egress: true
-       RuleAction: allow
-       CidrBlock: 0.0.0.0/0
-  PrivateOutboundRule:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-       NetworkAclId: !Ref myPrivateNetworkAcl
-       RuleNumber: 101
-       Protocol: -1
-       Egress: true
-       RuleAction: allow
-       CidrBlock: 0.0.0.0/0
+      LoginProfile:
+        Password: 
+          Ref: password
+      UserName: testUser
+  AddusersToDevGroup:
+     Type: AWS::IAM::UserToGroupAddition
+     Properties: 
+       GroupName: !Ref DevGroupCreation
+       Users: 
+          - !Ref devUserCreation
+
+  AddtestusertoTestingGroup:
+     Type: AWS::IAM::UserToGroupAddition
+     Properties: 
+       GroupName: 
+          Ref: TestingGroupCreation
+       Users: 
+          - !Ref testingUserCreation
+
+  TestingRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+             Version: 2012-10-17
+             Statement:
+                - Effect: Allow
+                  Principal:
+                     Service:
+                     - ec2.amazonaws.com
+                  Action:
+                     - 'sts:AssumeRole'
+      ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+      RoleName: devRole
+  TestingRole2:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+             Version: 2012-10-17
+             Statement:
+                - Effect: Allow
+                  Principal:
+                     Service:
+                     - ec2.amazonaws.com
+                  Action:
+                     - 'sts:AssumeRole'
+      ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      RoleName: testingRole 
+  s3bucketDevGroupPolicy:
+      Type: 'AWS::IAM::Policy'
+      Properties:
+         Groups:
+           - !Ref DevGroupCreation
+         PolicyName: s3DevGroupPolicy
+         PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+               - Effect: Allow
+                 Action:
+                    - 's3:ListBucket'                    
+                 Resource: 'arn:aws:s3:::devgroup-bucket:*'   
+               - Effect: Deny
+                 Action:
+                    - 's3:*'                    
+                 Resource: 'arn:aws:s3:::testinggroup-bucket:*'  
+
+  s3bucketTestingGroupPolicy:
+      Type: 'AWS::IAM::Policy'
+      Properties:
+         PolicyName: s3TestingGroupPolicy
+         PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+               - Effect: Allow
+                 Action:
+                    - 's3:ListBucket'                    
+                 Resource: 'arn:aws:s3:::testinggroup-bucket:*'
+               - Effect: Deny
+                 Action:
+                    - 's3:*'                    
+                 Resource: 'arn:aws:s3:::devgroup-bucket:*'
+         Groups:
+           - !Ref TestingGroupCreation
 Outputs:
-  myVPC:
-    Value: !Ref myVPC     
-  myPublicSubnet:
-    Value: !Ref myPublicSubnet
-  myPrivateSubnet:
-     Value: !Ref myPrivateSubnet
-  myInternetGateway:
-     Value: !Ref myInternetGateway  
-  myPublicRouteTable:
-     Value: !Ref myPublicRouteTable
-  myPrivateRouteTable:
-     Value: !Ref myPrivateRouteTable
-  myPublicNetworkAcl:
-     Value: !Ref myPublicNetworkAcl
-  myPrivateNetworkAcl:
-     Value: !Ref myPrivateNetworkAcl
-  
-
+  devGroup:
+    Value: !Ref DevGroupCreation
+     
+  testingGroup:
+    Value: !Ref TestingGroupCreation
+  devUser:
+     Value: !Ref devUserCreation
+  testingUser:
+     Value: !Ref testingUserCreation  
+  devGroupPolicy:
+     Value: !Ref s3bucketDevGroupPolicy
+  testingGroupPolicy:
+     Value: !Ref  s3bucketTestingGroupPolicy
